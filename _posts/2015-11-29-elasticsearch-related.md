@@ -15,7 +15,7 @@ tags: [lucene, elasticsearch, searching]
 
 ### 创建一个索引
 
-{% highlight %}
+{% highlight json %}
 curl -XPUT 'localhost:9200/customer?pretty'
 
 // 结果返回
@@ -28,7 +28,7 @@ curl -XPUT 'localhost:9200/customer?pretty'
 
 ### 查看所有索引
 
-{% highlight %}
+{% highlight json %}
 curl 'localhost:9200/_cat/indices?v'
 
 // 结果返回
@@ -42,7 +42,7 @@ yellow customer   5   1          0            0       495b           495b
 
 * 显式指定ID
 
-{% highlight %}
+{% highlight json %}
 curl -XPUT 'localhost:9200/customer/external/1?pretty' -d '
 {
   "name": "John Doe"
@@ -66,7 +66,7 @@ curl -XPUT 'localhost:9200/customer/external/1?pretty' -d '
 
 * 不指定ID
 
-{% highlight %}
+{% highlight json %}
 curl -XPOST 'localhost:9200/customer/external?pretty' -d '
 {
   "name": "Jane Doe"
@@ -81,7 +81,7 @@ curl -XPOST 'localhost:9200/customer/external?pretty' -d '
 
 ### 删除一个Document
 
-{% highlight %}
+{% highlight json %}
 curl -XDELETE 'localhost:9200/customer/external/2?pretty'
 {% endhighlight %}
 
@@ -89,7 +89,7 @@ curl -XDELETE 'localhost:9200/customer/external/2?pretty'
 
 ### 根据ID获取一个Document
 
-{% highlight %}
+{% highlight json %}
 curl -XGET 'localhost:9200/customer/external/1?pretty'
 
 // 结果返回
@@ -106,7 +106,7 @@ curl -XGET 'localhost:9200/customer/external/1?pretty'
 
 ### 删除一个索引
 
-{% highlight %}
+{% highlight json %}
 curl -XDELETE 'localhost:9200/customer?pretty'
 
 // 结果返回

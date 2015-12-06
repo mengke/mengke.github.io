@@ -17,7 +17,7 @@ tags: [spring, enterprise application, spring roo]
 ### 初始化一个Roo工程
 
 创建一个pizza的文件夹
-{highlight bash}
+{% highlight bash %}
 
 > mkdir pizza
 > cd pizza
@@ -27,7 +27,7 @@ pizza>
 
 执行roo命令
 
-{highlight bash}
+{% highlight bash %}
 
 pizza> roo
     ____  ____  ____
@@ -42,7 +42,8 @@ roo>
 {% endhighlight %}
 
 执行hint命令可以获取当前上下文可以执行的命令和提示, 对于当前情况, roo提示可以通过project命令创建一个工程
-{highlight bash}
+
+{% highlight bash %}
 roo> hint
 Welcome to Roo! We hope you enjoy your stay!
 
@@ -61,8 +62,9 @@ for Roo help.
 roo>
 {% endhighlight %}
 
-初始化一个ROO工程, 并设置根包名为com.springsource.roo.pizzashop
-{highlight bash}
+初始化一个ROO工程, 并设置根包名为`com.springsource.roo.pizzashop`
+
+{% highlight bash %}
 roo> project setup --topLevelPackage com.springsource.roo.pizzashop
 Created ROOT/pom.xml
 Created SRC_MAIN_RESOURCES
@@ -76,7 +78,7 @@ roo>
 
 获取提示通过键入`ent`(entity)+TAB*2获取关于创建实体类的更多信息
 
-{highlight bash}
+{% highlight bash %}
 
 com.springsource.roo.pizzashop roo> hint
 You can create entities either via Roo or your IDE.
@@ -99,7 +101,8 @@ com.springsource.roo.pizzashop roo>
 {% endhighlight %}
 
 创建一个名为`Topping`的实体类, 并创建关于它的一系列测试
-{highlight bash}
+
+{% highlight bash %}
 
 com.springsource.roo.pizzashop roo> entity jpa --class ~.domain.Topping --testAutomatically
 Created SRC_MAIN_JAVA/com/springsource/roo/pizzashop/domain
@@ -120,7 +123,7 @@ Created SRC_TEST_JAVA/com/springsource/roo/pizzashop/domain/ToppingIntegrationTe
 
 获取提示: 通过键入`field`命令来为`Topping`添加一个字段, 注意当前命令行环境在`~.domain.Topping`下
 
-{highlight bash}
+{% highlight bash %}
 
 ~.domain.Topping roo> hint
 You can add fields to your entities using either Roo or your IDE.
@@ -144,7 +147,7 @@ To learn about setting up many-to-one fields, type 'hint relationships'.
 
 为`Topping`添加一个类型为`java.lang.String`, 名称为`name`的字段
 
-{highlight bash}
+{% highlight bash %}
 
 ~.domain.Topping roo> field string --fieldName name --notNull --sizeMin 2
 Updated SRC_MAIN_JAVA/com/springsource/roo/pizzashop/domain/Topping.java
@@ -155,19 +158,19 @@ Created SRC_MAIN_JAVA/com/springsource/roo/pizzashop/domain/Topping_Roo_JavaBean
 
 通过`field set`新增一个many-to-many的关系
 
-{highlight bash}
+{% highlight bash %}
 ~.domain.Pizza roo> field set --fieldName toppings --type ~.domain.Topping
 {% endhighlight %}
 
 通过`field reference`添加一个many-to-one的关系
 
-{highlight bash}
+{% highlight bash %}
 ~.domain.Pizza roo> field reference --fieldName base --type ~.domain.Base
 {% endhighlight %}
 
 ### 集成测试
 
-{highlight bash}
+{% highlight bash %}
 ~.domain.PizzaOrder roo> perform tests
 ...
 -------------------------------------------------------
@@ -189,13 +192,13 @@ Tests run: 36, Failures: 0, Errors: 0, Skipped: 0
 
 `web mvc setup`命令会将当前应用转变为一个web程序,  并为该应用添加web应用相应的依赖, 如Spring MVC, Tiles等
 
-{highlight bash}
+{% highlight bash %}
 ~.domain.PizzaOrder roo> web mvc setup
 {% endhighlight %}
 
 为当前所有实体生成web层代码, 并将所有生成的web层代码放到`com.springsource.roo.pizzashop.web`包下
 
-{highlight bash}
+{% highlight bash %}
 ~.domain.PizzaOrder roo> web mvc all --package ~.web
 {% endhighlight %}
 
@@ -206,7 +209,7 @@ Tests run: 36, Failures: 0, Errors: 0, Skipped: 0
 
 ### 添加Spring Security来保护应用
 
-{highlight bash}
+{% highlight bash %}
 
 ~.web roo> security setup
 Created SPRING_CONFIG_ROOT/applicationContext-security.xml

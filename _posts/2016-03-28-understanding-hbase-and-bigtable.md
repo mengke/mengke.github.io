@@ -148,7 +148,7 @@ Fortunately, a column family may have any number of columns, denoted by a column
 {% endhighlight %}
 
 Notice that in the two rows shown, the "A" column family has two columns: "foo" and "bar", and the "B" column family has just one column whose qualifier is the empty string ("").
-When asking HBase/BigTable for data, you must provide the full column name in the form "<family>:<qualifier>". So for example, both rows in the above example have three columns: "A:foo", "A:bar" and "B:".
+When asking HBase/BigTable for data, you must provide the full column name in the form "\<family\>:\<qualifier\>". So for example, both rows in the above example have three columns: "A:foo", "A:bar" and "B:".
 Note that although the column families are static, the columns themselves are not. Consider this expanded row:
 
 {% highlight json %}

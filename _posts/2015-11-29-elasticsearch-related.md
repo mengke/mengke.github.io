@@ -125,9 +125,9 @@ curl -XDELETE 'localhost:9200/customer?pretty'
 
 它可以通过以下公式来决定
 
-{% highlight %}
-shard = hash(routing) % number_of_primary_shards
-{% endhighlight %}
+<div class="bs-callout bs-callout-info">
+	<p>shard = hash(routing) % number_of_primary_shards</p>
+</div>
 
 其中`routing`值默认是Document的`_id`, 当然也可以自己设置. 该值会被传到`hash`函数中获得一个hash值, 将该hash值与`number_of_primary_shards`取模, 得到的`shard`值介于0 ~ number_of_primary_shards-1之间, 该document会存储在该值对应的shard中.
 所以, 一个索引的主切片数(`number_of_primary_shards`)必须在索引创建时指定, 并且不能在中途做变更, 因为一旦更新后, 之前的documents有可能无法被正常找到

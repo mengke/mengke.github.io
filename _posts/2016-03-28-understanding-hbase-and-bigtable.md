@@ -211,4 +211,6 @@ Well, I hope that helps you understand conceptually what the HBase data model fe
 
 As always, I look forward to your thoughts, comments and suggestions.
 
+## References
+
 Refer to <http://jimbojw.com/wiki/index.php?title=Understanding_Hbase_and_BigTable>

@@ -117,5 +117,20 @@ curl -XDELETE 'localhost:9200/customer?pretty'
 
 该命令会删除整个`customer`索引
 
+## ES索引切片(Shards)工作原理
+
+在ES中, 每一个索引对应于一个或多个切片, 索引在ES中是一个逻辑空间, 而切片是真正的数据存放的物理空间, 它们散落在集群的各个节点中. 与ES交互的个体并不知道切片的存在, 他们直接与索引进行交互,
+
+当我们索引一个文档时, 文档存储在一个单独的主切片中. 那么当我们索引一个文档时, 我们如何该文档处于哪个主切片呢?
+
+它可以通过以下公式来决定
+
+{% highlight %}
+shard = hash(routing) % number_of_primary_shards
+{% endhighlight %}
+
+其中`routing`值默认是Document的`_id`, 当然也可以自己设置. 该值会被传到`hash`函数中获得一个hash值, 将该hash值与`number_of_primary_shards`取模, 得到的`shard`值介于0 ~ number_of_primary_shards-1之间, 该document会存储在该值对应的shard中.
+所以, 一个索引的主切片数(`number_of_primary_shards`)必须在索引创建时指定, 并且不能在中途做变更, 因为一旦更新后, 之前的documents有可能无法被正常找到
+
 
 

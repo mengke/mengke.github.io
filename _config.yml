@@ -1,6 +1,5 @@
 name: MengKe's Wiki
 markdown: kramdown
-pygments: true
 
 permalink: /:categories/:title.html
 
@@ -9,5 +8,8 @@ author :
   email : mengke@me.com
   github : mengke
   twitter : mengke85
-  
+
 production_url : http://mengke.github.io
+
+highlighter: pygments
+encoding: utf-8

@@ -1,5 +1,4 @@
 name: MengKe's Wiki
-markdown: kramdown
 
 permalink: /:categories/:title.html
 
@@ -11,5 +10,4 @@ author :
 
 production_url : http://mengke.github.io
 
-highlighter: pygments
 encoding: utf-8

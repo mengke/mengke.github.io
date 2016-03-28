@@ -10,4 +10,5 @@ author :
 
 production_url : http://mengke.github.io
 
+highlighter: rouge
 encoding: utf-8

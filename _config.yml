@@ -1,6 +1,6 @@
 name: MengKe's Wiki
 
-permalink: /:categories/:title.html
+permalink: none
 
 author :
   name : Ke Meng

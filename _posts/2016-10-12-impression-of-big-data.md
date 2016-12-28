@@ -165,6 +165,91 @@ Graph Schema基于事实的数据模型构建, 即每一个单一的信息(事�
 
 #### 引入序列化框架的必要性
 
+许多人喜欢使用类似json这种半结构化的数据格式, 理由是当后续业务发展, 可以快速增减字段. 但是像json这种灵活的数据结构容易导致由于程序问题导致错误数据进来后, 无法追踪以及排错. 而使用严格的数据格式在构建数据时, 对于一些非法数据就可以及时获得其错误原因, 另外通过类似strack trace等信息可以获知什么时候这条数据开始出错的(这是json无法达到的), 而且引入序列化框架额外的好处是能够自动为各个语言平台生成代码, 使其可以被不同语言平台使用.
+
+#### 网站数据统计分析中的数据模型 -- Thrift实现
+
+##### 节点
+
+对于这个应用来说, 主要涉及到两个实体: 用户和页面, 这里使用Thrift中的union来定义节点
+
+{% highlight %}
+union PersonID {
+  1: string cookie;
+  2: i64 user_id;
+}
+union PageID {
+  1: string url;
+}
+{% endhighlight %}
+
+##### 连线
+
+对于应用来说, 涉及到的关系有用户-用户的等价关系(两个用户实体其实指向的是同一个人, 比如新用户通过ip-a访问了网站, 在该网站上注册了一个用户user-a, 那个PersonID(ip-a)等价于PersonID(user-a)), 用户-页面的浏览关系
+
+{% highlight %}
+struct EquivEdge {
+  1: required PersonID id1;
+  2: required PersonID id2;
+}
+struct PageViewEdge {
+  1: required PersonID person;
+  2: required PageID page;
+  3: required i64 nonce;
+}
+{% endhighlight %}
+
+由于对于关系来说, 肯定是两个实体间的关联, 所以对于两个实体的字段是必填字段.
+
+<div class="bs-callout bs-callout-info">
+  <p>struct是Thrift中基本的组合类型, 每一个字段都需要通过required或optional进行修饰, 如果一个字段被required修饰, 该字段的值就必须被提供, 不然Thrift在序列化或反序列化时会报错</p>
+  <p>而union类似于C++中的union, 它的结构和struct类似, 但与struct显著的区别就是union中定义的诸多字段中同时只能有一个有效</p>
+</div>
+
+##### 属性
+
+一个属性包含一个节点和一个属性值, 属性值可以是各种属性类型中的其中之一, 所以我们使用union定义
+
+对于网页来说, 只有一个属性需要进行定义
+
+{% highlight %}
+union PagePropertyValue {
+  1: i32 page_views;
+}
+struct PageProperty {
+  1: required PageID id;
+  2: required PagePropertyValue property;
+}
+{% endhighlight %}
+
+用户相对来说复杂一些
+
+{% highlight %}
+
+struct Location {
+  1: optional string city;
+  2: optional string state;
+  3: optional string country;
+}
+
+enum GenderType {
+  MALE = 1,
+  FEMALE = 2
+}
+
+union PersonPropertyValue {
+  1: string full_name;
+  2: GenderType gender;
+  3: Location location;
+}
+
+struct PersonProperty {
+  1: required PersonID id;
+  2: required PersonPropertyValue property;
+}
+
+{% endhighlight %}
+
 ### Batch Layer上的计算
 
 ## Service Layer

@@ -173,7 +173,7 @@ Graph Schema基于事实的数据模型构建, 即每一个单一的信息(事�
 
 对于这个应用来说, 主要涉及到两个实体: 用户和页面, 这里使用Thrift中的union来定义节点
 
-{% highlight %}
+{% highlight java %}
 union PersonID {
   1: string cookie;
   2: i64 user_id;
@@ -187,7 +187,7 @@ union PageID {
 
 对于应用来说, 涉及到的关系有用户-用户的等价关系(两个用户实体其实指向的是同一个人, 比如新用户通过ip-a访问了网站, 在该网站上注册了一个用户user-a, 那个PersonID(ip-a)等价于PersonID(user-a)), 用户-页面的浏览关系
 
-{% highlight %}
+{% highlight java %}
 struct EquivEdge {
   1: required PersonID id1;
   2: required PersonID id2;
@@ -212,7 +212,7 @@ struct PageViewEdge {
 
 对于网页来说, 只有一个属性需要进行定义
 
-{% highlight %}
+{% highlight java %}
 union PagePropertyValue {
   1: i32 page_views;
 }
@@ -224,7 +224,7 @@ struct PageProperty {
 
 用户相对来说复杂一些
 
-{% highlight %}
+{% highlight java %}
 
 struct Location {
   1: optional string city;

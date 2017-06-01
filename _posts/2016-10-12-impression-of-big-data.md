@@ -250,6 +250,40 @@ struct PersonProperty {
 
 {% endhighlight %}
 
+将以上数据糅合在一起
+
+{% highlight java %}
+
+union DataUnit {
+  1: PersonProperty person_property;
+  2: PageProperty page_property;
+  3: EquivEdge equiv;
+  4: PageViewEdge page_view;
+}
+
+在存储时每一个数据单元都可以选择属性中的一项
+
+struct Pedigree {
+  1: required i32 true_as_of_secs;
+}
+
+每一个数据都需要添加时间戳
+
+struct Data {
+  1: required Pedigree pedigree;
+  2: required DataUnit dataunit;
+}
+
+{% endhighlight %}
+
+#### 数据存储
+
+基于前面对数据的定义, 数据是不可变的并且永远有效, 数据存储主要的操作就是将新的数据拼接在原来的数据后, 在后续计算Batch Views时, 需要一次性读取大批量的数据, 并且由于我们要保存所有历史数据并且读取这些数据, 所以我们需要为这种大数据量的, 并且持续增长的数据操作进行优化; 另外, 随机读取其中部分数据并不需要
+
+根据上述对数据存储方案的需求的描述, 分布式文件系统是最符合需求的方案
+
+
+
 ### Batch Layer上的计算
 
 ## Service Layer
@@ -259,6 +293,7 @@ struct PersonProperty {
 Queue设计演变过程
 
 在异步程序中, 当一个事件到来, 客户端将其分配到一个worker中执行, 缺点: 无法获知事件处理的结果, 出错无法重试; 一旦过量的事件进入系统, 可能会导致系统奔溃
+
 
 Queue的引入
 

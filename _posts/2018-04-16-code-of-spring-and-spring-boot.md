@@ -32,32 +32,36 @@ Spring Boot通过`org.springframework.core.io.support.SpringFactoriesLoader#load
 ### ApplicationContextInitializer
 
 * spring-boot
-** `org.springframework.boot.context.ConfigurationWarningsApplicationContextInitializer`
-** `org.springframework.boot.context.ContextIdApplicationContextInitializer`
-** `org.springframework.boot.context.config.DelegatingApplicationContextInitializer`
-** `org.springframework.boot.web.context.ServerPortInfoApplicationContextInitializer`
+    + `org.springframework.boot.context.ConfigurationWarningsApplicationContextInitializer`
+    + `org.springframework.boot.context.ContextIdApplicationContextInitializer`
+    + `org.springframework.boot.context.config.DelegatingApplicationContextInitializer`
+    + `org.springframework.boot.web.context.ServerPortInfoApplicationContextInitializer`
+- - -
 * spring-boot-autoconfigure
-** `org.springframework.boot.autoconfigure.SharedMetadataReaderFactoryContextInitializer`
-** `org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener`
+    + `org.springframework.boot.autoconfigure.SharedMetadataReaderFactoryContextInitializer`
+    + `org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLoggingListener`
+- - -
 * 如果引入了spring-boot-devtools, 还包括以下`ApplicationContextInitializer`
-* `org.springframework.boot.devtools.restart.RestartScopeInitializer`
+    + `org.springframework.boot.devtools.restart.RestartScopeInitializer`
 
 ### ApplicationListener
 
 * spring-boot
-** `org.springframework.boot.ClearCachesApplicationListener`
-** `org.springframework.boot.builder.ParentContextCloserApplicationListener`
-** `org.springframework.boot.context.FileEncodingApplicationListener`
-** `org.springframework.boot.context.config.AnsiOutputApplicationListener`
-** `org.springframework.boot.context.config.ConfigFileApplicationListener`
-** `org.springframework.boot.context.config.DelegatingApplicationListener`
-** `org.springframework.boot.context.logging.ClasspathLoggingApplicationListener`
-** `org.springframework.boot.context.logging.LoggingApplicationListener`
-** `org.springframework.boot.liquibase.LiquibaseServiceLocatorApplicationListener`
+    + `org.springframework.boot.ClearCachesApplicationListener`
+    + `org.springframework.boot.builder.ParentContextCloserApplicationListener`
+    + `org.springframework.boot.context.FileEncodingApplicationListener`
+    + `org.springframework.boot.context.config.AnsiOutputApplicationListener`
+    + `org.springframework.boot.context.config.ConfigFileApplicationListener`
+    + `org.springframework.boot.context.config.DelegatingApplicationListener`
+    + `org.springframework.boot.context.logging.ClasspathLoggingApplicationListener`
+    + `org.springframework.boot.context.logging.LoggingApplicationListener`
+    + `org.springframework.boot.liquibase.LiquibaseServiceLocatorApplicationListener`
+- - -
 * spring-boot-autoconfigure
-** `org.springframework.boot.autoconfigure.BackgroundPreinitializer`
+    + `org.springframework.boot.autoconfigure.BackgroundPreinitializer`
+- - -
 * 如果引入了spring-boot-devtools, 还包括以下`ApplicationListener`
-** `org.springframework.boot.devtools.restart.RestartApplicationListener`
+    + `org.springframework.boot.devtools.restart.RestartApplicationListener`
 
 ### SpringApplicationRunListener
 * `org.springframework.boot.context.event.EventPublishingRunListener`
@@ -94,6 +98,7 @@ Spring Boot通过`org.springframework.core.io.support.SpringFactoriesLoader#load
 * `DelegatingApplicationContextInitializer`: 初始化其他注册在`context.initializer.classes`的`ApplicationContextInitializer`
 * `ServerPortInfoApplicationContextInitializer`: 将自身作为一个`ApplicationListener`注册到`ApplicationContext`, 用于监听`WebServerInitializedEvent`事件
 * `SharedMetadataReaderFactoryContextInitializer`: 创建一个`ConfigurationClassPostProcessor`(用于处理标注`@Configuration`的类)和Spring Boot共享的一个MetadataReader, 用于读取类的元信息
+- - -
 * `ConditionEvaluationReportLoggingListener`: 注册一个`ApplicationListener`用于在contextRefreshed的时候打印Auto Configuration的信息
 * `RestartScopeInitializer`: 注册一个`RestartScope`到`BeanFactory`
 

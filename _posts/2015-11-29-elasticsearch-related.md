@@ -141,17 +141,17 @@ curl -XDELETE 'localhost:9200/customer?pretty'
 * 如果是*nux, 检测是否是root账户执行
 * 根据配置, 启用`system call filter`, `mlockall`, 设置启动ES进程用户的最大进程数和最大虚拟内存数等操作
 * 做一些启动前环境检测
-** 检测jvm启动时初始堆内存与最大堆内存是否一致 - 由于初始内存和最大堆内存不一致的话, 在系统运行过程中根据内存用量会重新分配jvm占用内存大小, 从而导致jvm暂停
-** 检测File descriptors最大数
-** 检测内存锁 - JVM在做GC时, 有可能会将堆内存中的数据换到硬盘上, 而在进行后续与数据相关的操作时必须再将硬盘中的数据换回内存, 导致大量的磁盘操作
-** 最大线程数检测
-** 最大虚拟内存检测 - ES和Lucene使用`mmap`来将索引文件映射到内存加速索引的访问
-** 和上一点类似, 为了让ES更有效率的使用`mmap`, 需要检测ES进程启动用户所能控制的最大内存映射大小
-** 检测jvm版本不是client版
-** 检测GC不能使用`-XX:+UseSerialGC`, SerialGC适合用于单核, 或小内存的机器
-** 检测是否启用`system call filter`, 出于考虑, 启用`system call filter`来避免系统通过ES执行一些非法系统调用
-** 检测是否设置了JVM启动参数`OnError`和`OnOutOfMemoryError`, 这两个标识允许JVM遇到Error后执行任意的命令, 这与上一项有冲突, 所以必须保证这两项参数不能被启用
-** jdk8早期版本中G1GC会导致索引损坏, 检测当G1GC启用后, 没有使用这些版本(prior to Update 40)
+    + 检测jvm启动时初始堆内存与最大堆内存是否一致 - 由于初始内存和最大堆内存不一致的话, 在系统运行过程中根据内存用量会重新分配jvm占用内存大小, 从而导致jvm暂停
+    + 检测File descriptors最大数
+    + 检测内存锁 - JVM在做GC时, 有可能会将堆内存中的数据换到硬盘上, 而在进行后续与数据相关的操作时必须再将硬盘中的数据换回内存, 导致大量的磁盘操作
+    + 最大线程数检测
+    + 最大虚拟内存检测 - ES和Lucene使用`mmap`来将索引文件映射到内存加速索引的访问
+    + 和上一点类似, 为了让ES更有效率的使用`mmap`, 需要检测ES进程启动用户所能控制的最大内存映射大小
+    + 检测jvm版本不是client版
+    + 检测GC不能使用`-XX:+UseSerialGC`, SerialGC适合用于单核, 或小内存的机器
+    + 检测是否启用`system call filter`, 出于考虑, 启用`system call filter`来避免系统通过ES执行一些非法系统调用
+    + 检测是否设置了JVM启动参数`OnError`和`OnOutOfMemoryError`, 这两个标识允许JVM遇到Error后执行任意的命令, 这与上一项有冲突, 所以必须保证这两项参数不能被启用
+    + jdk8早期版本中G1GC会导致索引损坏, 检测当G1GC启用后, 没有使用这些版本(prior to Update 40)
 * 在每个节点根据该节点设置的数据目录`path.data`(可能有多个)尝试获取节点锁, 如果其中一个数据目录获取失败, 则重新建立另外一个锁目录, 直至超过配置数node.max_local_storage_nodes           NodeEnvironment
 * 载入配置中指定的`${path.home}/plugins`和`${path.home}/modules`目录中的所有插件, 并实例化它们的插件实例, 例如`public class Netty4Plugin extends Plugin implements NetworkPlugin { ... }`            PluginsService
 * 创建一个含有操作类型的线程池, 每种操作类型都会映射到一个独立的线程池, 这些线程池根据实际用途拥有不同的线程数, 队列长度, 任务舍弃策略等   ThreadPool

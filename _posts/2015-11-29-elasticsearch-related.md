@@ -152,31 +152,42 @@ curl -XDELETE 'localhost:9200/customer?pretty'
     + 检测是否启用`system call filter`, 出于考虑, 启用`system call filter`来避免系统通过ES执行一些非法系统调用
     + 检测是否设置了JVM启动参数`OnError`和`OnOutOfMemoryError`, 这两个标识允许JVM遇到Error后执行任意的命令, 这与上一项有冲突, 所以必须保证这两项参数不能被启用
     + jdk8早期版本中G1GC会导致索引损坏, 检测当G1GC启用后, 没有使用这些版本(prior to Update 40)
-* 在每个节点根据该节点设置的数据目录`path.data`(可能有多个)尝试获取节点锁, 如果其中一个数据目录获取失败, 则重新建立另外一个锁目录, 直至超过配置数node.max_local_storage_nodes           NodeEnvironment
+* 在每个节点根据该节点设置的数据目录`path.data`(可能有多个)尝试获取节点锁, 如果其中一个数据目录获取失败, 则重新建立另外一个锁目录, 直至超过配置数`node.max_local_storage_nodes`           NodeEnvironment
 * 载入配置中指定的`${path.home}/plugins`和`${path.home}/modules`目录中的所有插件, 并实例化它们的插件实例, 例如`public class Netty4Plugin extends Plugin implements NetworkPlugin { ... }`            PluginsService
 * 创建一个含有操作类型的线程池, 每种操作类型都会映射到一个独立的线程池, 这些线程池根据实际用途拥有不同的线程数, 队列长度, 任务舍弃策略等   ThreadPool
-* 利用插件构建不同服务, 例如NetworkService, ClusterService, TransportService等, 并启动这些服务
-
+* 利用插件构建不同服务, 例如`NetworkService`, ClusterService, TransportService等, 并启动这些服务
 
 NetworkPlugin启动时, 会根据配置(默认netty4)启动指定的TCP和HTTP服务   Netty4Transport.doStart
 
 ### Index操作/Bulk操作
 
-index操作合并在bulk操作中执行, 
-首先请求中携带了pipeline参数的话, 检测当前节点是否是ingest节点, 如果是, 则将请求中的doc使用pipeline参数指定的pipeline-id进行预处理, 如果不是则将请求转发到随机的ingest节点上.  TransportBulkAction#doExecute
-如果集群中没有请求中的Indices, 并且设置了允许自动创建的话, 则对缺失的索引进行创建.
-根据请求中doc的计算shardId, 并根据shardId将批量请求中的请求项进行分组, 将每一组的请求项列表组成一个新的BulkShardRequest, 并统一都转发给TransportShardBulkAction处理                   TransportBulkAction$BulkOperation#doRun
-根据shardId找到对应的主切片所在的节点, 如果当前节点为主切片所在的节点, 则直接在本地处理请求, 否则向远程节点发送请求                   TransportReplicationAction$ReroutePhase#doRun
-请求发送:
-本地请求: 根据具体请求操作类型决定线程池类型(index对应index的线程池, bulk对应bulk的线程池), TransportService#sendLocalRequest
-远程请求: 会将请求转发给主切片所在的节点, 通信使用TCP协议. 在ES启动时会根据transport插件(默认netty4)来决定使用哪种实现, 并且在启动时还会建立与各个节点的连接, 并存放在Map中, 以DiscoveryNode为Key, 发送请求时, 根据被请求节点的DiscoveryNode对象获取连接, 并在该连接写入请求     TcpTransport#connectToNode
-请求处理:
-本地请求: 直接将请求通过RequestHandlerRegistry中注册的handler进行处理;
-远程请求: 将请求序列化为一个字节数组, 并将该字节数组使用比如Netty4的Channel对象发送出去, 在上述启动过程中, 请求会经过netty4插件使用RequestHandlerRegistry中注册的handler进行处理, 定位handler的action在请求字节数组中获取   TcpTransport#messageReceived -> TcpTransport#handleRequest
+* 索引操作被委派给`TransportIndexAction`来执行, 最终也会将该请求转发给`TransportBulkAction`执行
+* Bulk操作被委派给`TransportBulkAction`来执行
 
-在主切片完成索引写入操作后, 需要将该切片对应的复制切片置为过期数据, 然后向这些复制切片所在的节点发送复制请求  ReplicationOperation#performOnReplicas
+所以我们主要沿着`TransportBulkAction`的流程往下梳理
 
-实际索引操作: TransportReplicationAction$AsyncPrimaryAction#doRun -> onResponse -> ReplicationOperation#execute -> TransportWriteAction#shardOperationOnPrimary -> TransportShardBulkAction#shardOperationOnPrimary -> TransportShardBulkAction#executeIndexRequestOnPrimary -> IndexShard#index -> Engine#index(调用lucene API写入索引IndexWriter#addDocuments|IndexWriter#updateDocuments)
+* `TransportBulkAction#onExecute`: 检查request是否包含pipeline, 如果包含pipeline, 则将该请求发送到ingest节点进行处理(如果本节点就是ingest节点, 那么直接在本地处理ingest请求), 如果本请求中涉及到的索引不存在, 则将创建索引的请求发送到Master节点, 待所有索引创建完毕后, 执行bulk命令;
+* `TransportBulkAction.BulkOperation#doRun`: 根据索引以及参数中的routing和id计算`ShardId`, `ShardId`由`Index`和整型类型的`shardId`构成, 比如将一个索引分为n个shard, `shardId`是从0开始到n-1的碎片标识. 后续根据`ShardId`将请求中的每一个请求项进行分组, 并为每一个`ShardId`其包含的一系列请求项生成一个`BulkShardRequest`, 之后将这些`BulkShardRequest`s分发给`TransportShardBulkAction`执行, 每一个`ShardId`执行一次;
+* `TransportShardBulkAction#doExecute`: `TransportShardBulkAction`继承自`TransportReplicationAction`, 该方法执行的实际是`TransportReplicationAction.doExecute`, 该方法的内容是`new ReroutePhase((ReplicationTask) task, request, listener).run();`, 每一个`ShardId`都会创建一个`ReroutePhase`来对应一个`BulkShardRequest`;
+* `TransportReplicationAction.ReroutePhase#doRun`: 根据`ShardId`确定该请求对应的主分片所在, 如果主分片处于当前节点, 则执行本地请求; 否则执行远程请求, 将请求发送给主分片所在的节点;
+* 请求发送: `TransportReplicationAction.ReroutePhase#performAction`->`TransportService#sendRequest`->`TransportService#sendRequestInternal`
+** 远程请求(`TcpTransport.NodeChannels#sendRequest`->`TcpTransport#internalSendMessage`->`NettyTcpChannel#sendMessage`): 会将请求转发给主切片所在的节点, 通信使用TCP协议. 在ES启动时会根据transport插件(默认netty4)来决定使用哪种实现, 并且在启动时还会建立与各个节点的连接, 并存放在`Map`中, 以`DiscoveryNode`为Key, 发送请求时, 根据被请求节点的`DiscoveryNode`对象获取连接, 并在该连接写入请求, 该请求可以序列化;
+** 本地请求(`TransportService#sendLocalRequest`): 执行本地请求方法路径为TransportService#sendLocalRequest;
+* 请求处理:
+** 远程请求: 请求发送到主分片所在的节点之后, 该节点监听的tcp端口接收到字节请求, `Netty4MessageChannelHandler#channelRead`->`TcpTransport#messageReceived`->`TcpTransport#handleRequest`, 通过接收到的字节请求中读取出action, 根据action来确定其`RequestHandlerRegistry`, 并且使用该`RequestHandlerRegistry`实例将接收到的字节请求构建为一个`ConcreteShardRequest`实例, 该实例中包含一个`BulkShardRequest`实例, 根据这个reg实例的executor值(`ThreadPool.Names.WRITE`)确定好线程池, 以本操作为例是FIXED线程池, 线程池大小为机器的处理器数量, queue大小为200. 在该线程池执行`RequestHandlerRegistry#processMessageReceived(request, channel)`;
+** 本地请求: `TransportService#sendLocalRequest`方法中传递的`TransportResponseHandler`中重写了executor为`TheadPool.SAME`, 即在当前线程执行`RequestHandlerRegistry#processMessageReceived(request, channel)`;
+* `RequestHandlerRegistry#processMessageReceived(request, channel)`: 根据`actionName`(`BulkAction.NAME + "[s]" + "[p]"`)确定实际执行的方法为`PrimaryOperationTransportHandler#messageReceived`, 而该方法的内容是`new AsyncPrimaryAction(...).run()`;
+* `TransportReplicationAction.AsyncPrimaryAction#doRun`: 该方法执行的是`acquirePrimaryShardReference(..., ActionListener<PrimaryShardReference> onReferenceAcquired, ...)`, 其中`onReferenceAcquired`为`TransportReplicationAction.AsyncPrimaryAction`实例自身, 其执行流程为先获取主碎片操作许可, 成功获取后则执行`TransportReplicationAction.AsyncPrimaryAction#onResponse`, 在执行bulk操作前, 需要先判断主碎片是否还在当前节点, 如果不在的话, 则直接发送执行请求给主碎片所在节点, 而不需重新获取操作许可; 如果主碎片还处于当前节点, 那么直接执行`AsyncPrimaryAction#createReplicatedOperation.execute()`, 该方法实际内容是`new ReplicationOperation.execute()`;
+* `ReplicationOperation#execute`:  接下来执行`TransportReplicationAction.PrimaryShardReference#perform` -> `TransportShardBulkAction#shardOperationOnPrimary`;
+* `TransportShardBulkAction#shardOperationOnPrimary`: 该方法执行的实际内容是`TransportShardBulkAction#executeBulkItemRequest`, 由于我们追踪的是Index操作, 所以接下来执行`TransportShardBulkAction#executeIndexRequest`的方法;
+* `TransportShardBulkAction#executeIndexRequest`: 该方法将请求构建为一个`SourceToParse`实例, 如果需要动态更新Mapping, 则请求更新Mapping, 而后再请求`IndexShard#applyIndexOperationOnPrimary`->`IndexShard#applyIndexOperation`->`IndexShard#index`->`InternalEngine#index`;
+* `InternalEngine#index`: 实际的索引方法, 在实际执行索引请求之前, ES会优化索引过程, 具体优化过程参见ES索引逻辑优化章节, 该方法执行完毕后, 继续执行`ReplicationOperation#execute`方法后续部分, 从`index`方法返回的结果中获取`ReplicaRequest`, 并执行复制请求`ReplicationOperation#performOnReplicas`;
+* `ReplicationOperation#performOnReplicas`: 该方法需要将该切片对应的副本置为过期数据, 然后为每一个副本执行`ReplicationOperation#performOnReplica`;
+* `ReplicationOperation#performOnReplica`: 该方法执行的内容是`TransportReplicationAction.ReplicasProxy#performOn`;
+* `TransportReplicationAction.ReplicasProxy#performOn`: 获取副本所在的节点, 发送复制请求(`BulkAction.NAME + "[s]" + "[r]"`)到该节点, 对应节点接收到复制请求, 在副本所在节点根据`actionName`(`BulkAction.NAME + "[s]" + "[r]"`)确定在副本节点执行`TransportReplicationAction.ReplicaOperationTransportHandler#messageReceived`方法, 该方法执行的内容是`new AsyncReplicaAction(...).run()`;
+* `TransportReplicationAction.AsyncReplicaAction#doRun`: 该方法执行的是`IndexShard#acquireReplicaOperationPermit(..., ActionListener<Releasable> onPermitAcquired, ...)`, 其中`onPermitAcquired`为`TransportReplicationAction.AsyncReplicaAction`实例自身, 其执行流程为先获取碎片副本的操作许可, 成功获取后则执行`TransportReplicationAction.AsyncReplicaAction#onResponse`->`TransportShardBulkAction#shardOperationOnReplica`->`TransportShardBulkAction#performOnReplica`, 处于这个碎片副本的所有索引操作(或者其他操作)item都将在这个方法中执行;
+* `TransportShardBulkAction#performOnReplica`: 迭代`BulkShardRequest`请求中的每一个`DocWriteRequest`请求, 以上述在主碎片中执行对应请求为正常返回为例, 将该`DocWriteRequest`和主碎片对应的返回等信息传入给`TransportShardBulkAction#performOpOnReplica`方法;
+* `TransportShardBulkAction#performOpOnReplica`: 该方法执行的内容是`IndexShard#applyIndexOperationOnReplica`->`IndexShard#applyIndexOperation`->`IndexShard#index`->`InternalEngine#index`, 该方法根据副本的索引策略进行优化, 然后再进行索引.
 
 ### 搜索
 
@@ -244,3 +255,15 @@ ES集群中每个节点只保存单独的一份数据, 该节点也只负责处�
 ### 搜索时如何将若干个分片中符合条件的结果组合
 
 ### 默认ZenDiscovery如何工作, 如何能够感知到新节点, 当一个节点down掉后, 如何保证ES还能正常提供服务; 当master down掉后, 如何重新选举新master
+
+## 部分代码节选
+
+{% highlight java %}
+Map<String, List<Path>> metaPlugins = new LinkedHashMap<>();
+  ...
+try (DirectoryStream<Path> subStream = Files.newDirectoryStream(plugin)) {
+  for (Path subPlugin : subStream) {
+    metaPlugins.computeIfAbsent(name, n -> new ArrayList<>()).add(subPlugin);
+  }
+}
+{% endhighlight %}

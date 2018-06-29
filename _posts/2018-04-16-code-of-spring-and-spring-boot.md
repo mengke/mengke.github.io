@@ -77,7 +77,7 @@ Spring Boot通过`org.springframework.core.io.support.SpringFactoriesLoader#load
 
 ### `ApplicationEnvironmentPreparedEvent`
 
-* `ConfigFileApplicationListener`: 载入注册于spring.factories的`org.springframework.boot.env.EnvironmentPostProcessor`s, 主要用于在`context.refresh`之前自定义应用的`Environment`
+* `ConfigFileApplicationListener`: 载入注册于spring.factories的`org.springframework.boot.env.EnvironmentPostProcessor`s, 主要用于在`context.refresh`之前自定义应用的`Environment`, 并且载入注册的`org.springframework.boot.env.PropertySourceLoader`定义的属性配置, 例如application.yml
 * `DelegatingApplicationListener`: 在本阶段(EnvironmentPrepared)载入注册于`context.listener.classes`属性下的`ApplicationListener`s, 并将后续事件分发给他们
 * `LoggingApplicationListener`: 初始化日志系统, 并注册Shutdown Hook
 * `ConfigFileApplicationListener`: 将默认属性优先级将为最低

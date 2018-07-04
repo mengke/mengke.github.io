@@ -189,9 +189,16 @@ NetworkPlugin启动时, 会根据配置(默认netty4)启动指定的TCP和HTTP�
 * `TransportShardBulkAction#performOnReplica`: 迭代`BulkShardRequest`请求中的每一个`DocWriteRequest`请求, 以上述在主碎片中执行对应请求为正常返回为例, 将该`DocWriteRequest`和主碎片对应的返回等信息传入给`TransportShardBulkAction#performOpOnReplica`方法;
 * `TransportShardBulkAction#performOpOnReplica`: 该方法执行的内容是`IndexShard#applyIndexOperationOnReplica`->`IndexShard#applyIndexOperation`->`IndexShard#index`->`InternalEngine#index`, 该方法根据副本的索引策略进行优化, 然后再进行索引.
 
+Bulk操作的简要流程如下图所示
+
+<img src="/assets/img/es_index_seq.png" class="img-thumbnail">
+
 ### 搜索
 
 拿非跨集群的搜索举例, 跨集群搜索与集群内搜索处理方式唯一的不同是跨集群搜索需要建立与其他集群的连接, 而这个连接可以看做集群内的一个到任意DiscoveryNode的连接   TransportSearchAction#doExecute -> RemoteClusterService#collectSearchShards
+
+* `TransportSearchAction#doExecute`: 获取搜索请求`SearchRequest`涉及到的索引, 并检查是否有属于其他集群的索引, 如果有的话则执行`RemoteClusterService#collectSearchShards`方法收集涉及到的集群的搜索结果, 合并后向请求方返回, 本例中只以集群内搜索为例, 所以该方法下一步直接执行`TransportSearchAction#executeSearch`;
+* `TransportSearchAction#executeSearch`: 
 
 根据请求中indies参数解析出具体的索引列表, 解析indies中带有通配符或日期函数的表达式, 将它们映射成为一系列具体的索引, 检查是否有索引别名与参数中的表达式所匹配, 一一将它们解析出来   IndexNameExpressionResolver#concreteIndices
 获取indies参数中包含的索引别名关联的Filters, 这些过滤器在执行搜索操作前合并到查询条件的filter上下文中                   TransportSearchAction#buildPerIndexAliasFilter
@@ -267,3 +274,4 @@ try (DirectoryStream<Path> subStream = Files.newDirectoryStream(plugin)) {
   }
 }
 {% endhighlight %}
+

@@ -138,7 +138,7 @@ curl -XDELETE 'localhost:9200/customer?pretty'
 
 * 创建PID文件
 * 检测Lucene版本
-* 如果是*nux, 检测是否是root账户执行
+* 如果是\*nux, 检测是否是root账户执行
 * 根据配置, 启用`system call filter`, `mlockall`, 设置启动ES进程用户的最大进程数和最大虚拟内存数等操作
 * 做一些启动前环境检测
     + 检测jvm启动时初始堆内存与最大堆内存是否一致 - 由于初始内存和最大堆内存不一致的话, 在系统运行过程中根据内存用量会重新分配jvm占用内存大小, 从而导致jvm暂停
@@ -158,6 +158,16 @@ curl -XDELETE 'localhost:9200/customer?pretty'
 * 利用插件构建不同服务, 例如`NetworkService`, ClusterService, TransportService等, 并启动这些服务
 
 NetworkPlugin启动时, 会根据配置(默认netty4)启动指定的TCP和HTTP服务   Netty4Transport.doStart
+
+### ES请求线程模型
+
+以HTTP请求(推荐使用)为例, 当Node1接收到HTTP请求, 该请求直接在监听HTTP协议的`EventLoopGroup`的一个线程中预执行, 
+
+* 如果后续操作可以在本地运行, 那么剩下的操作则在当前这个线程执行
+* 如果后续操作需要在其他节点执行, 则请求会被分发到另外的节点, 该节点接收到TCP请求后, 根据请求所属的线程池类型, 分配对应的线程池进行执行
+
+
+<img src="/assets/img/es_request_thread_model.png" class="img-thumbnail">
 
 ### Index操作/Bulk操作
 
@@ -198,7 +208,13 @@ Bulk操作的简要流程如下图所示
 拿非跨集群的搜索举例, 跨集群搜索与集群内搜索处理方式唯一的不同是跨集群搜索需要建立与其他集群的连接, 而这个连接可以看做集群内的一个到任意DiscoveryNode的连接   TransportSearchAction#doExecute -> RemoteClusterService#collectSearchShards
 
 * `TransportSearchAction#doExecute`: 获取搜索请求`SearchRequest`涉及到的索引, 并检查是否有属于其他集群的索引, 如果有的话则执行`RemoteClusterService#collectSearchShards`方法收集涉及到的集群的搜索结果, 合并后向请求方返回, 本例中只以集群内搜索为例, 所以该方法下一步直接执行`TransportSearchAction#executeSearch`;
-* `TransportSearchAction#executeSearch`: 
+* `TransportSearchAction#executeSearch`: 根据搜索请求中的索引和routing计算Shards, 并根据Shards个数, 查询类型等优化设置`search_type`, 而后调用`TransportSearchAction#searchAsyncAction`;
+* `TransportSearchAction#searchAsyncAction`: 如果`search_type`为`DFS_QUERY_THEN_FETCH`, 则执行`SearchDfsQueryThenFetchAsyncAction#execute`; 如果`search_type`为`QUERY_THEN_FETCH`, 则执行`SearchQueryThenFetchAsyncAction#execute`; 这两个SearchAction都继承自`InitialSearchPhase`
+* `InitialSearchPhase#execute`: 为每一个ShardId按顺序选择一个Shard进行搜索命令;
+** `SearchDfsQueryThenFetchAsyncAction#execute`: 向选择的Shard发送搜索请求`indices:data/read/search[phase/dfs]`;
+** `SearchQueryThenFetchAsyncAction#execute`: 向选择的Shard发送搜索请求`indices:data/read/search[phase/query]`;
+* 请求接收:
+** `indices:data/read/search[phase/dfs]`: 根据`SearchTransportService#registerRequestHandler`的内容, 执行`SearchService#executeDfsPhase`
 
 根据请求中indies参数解析出具体的索引列表, 解析indies中带有通配符或日期函数的表达式, 将它们映射成为一系列具体的索引, 检查是否有索引别名与参数中的表达式所匹配, 一一将它们解析出来   IndexNameExpressionResolver#concreteIndices
 获取indies参数中包含的索引别名关联的Filters, 这些过滤器在执行搜索操作前合并到查询条件的filter上下文中                   TransportSearchAction#buildPerIndexAliasFilter
@@ -222,18 +238,32 @@ Bulk操作的简要流程如下图所示
   <p>一旦收到足够的回馈, 此次变更会被提交, 并发送消息给所有节点, 所有节点修改它们内部的集群状态; master node在执行队列中下一次集群状态变更之前会等待所有节点的修改回复</p>
 </div>
 
-假设我们启动第一个ES节点叫做node1, 上面提到的线程池中的generic提供一个线程来开始discovery的过程      JoinThreadControl$JoinThreadControl#startNewThreadIfNotRunning
-该节点依次向配置`discovery.zen.ping.unicast.hosts`中节点发送ping请求, 每个ping请求会先后发送3次, 对于当前的例子, node1接到ping请求返回后, 并进行过滤(排除自身)处理, node1没有感知到任何其他节点   UnicastZenPing#ping
-node1检查ping请求返回, 没有发现master节点, 并将自身加到候选队列, 检查是否有足够的候选节点, 在这个例子中是3个, 由于目前并不满足, 所以会等待一定时间后, 继续后续其他的流程                        ZenDiscovery#findMaster
-接下来启动第二个节点node2, 依然是按照配置依次发送ping请求, 不同于第一个节点的是, 这一次node2得到的ping返回并排除自身后为node1
-node2节点依次遍历ping返回仍然没有master节点, 将node1和node2加入候选队列后, 仍然不够3个, 所以node2会等待一定时间后, 继续后续其他的流程
-node3节点启动后得到的ping返回为node1, node2, node3, 这时将它们加入候选队列后, 满足了最小的master候选个数, 这时在node3上选择出一个节点作为master, 假定是node2, 其他两个节点目前均得到3个节点的返回, 均选择node2作为master
-现在3个节点均继续执行, node1和node3未被选中, 所以会与node2建立连接并发送joining请求                                       ZenDiscovery#joinElectedMaster
-node2接收到一个joining请求, 会维护自己内存的joins数加1, 直到有足够的joins(discovery.zen.minimum_master_nodes - 1), 该节点会和加入它的节点建立连接     NodeJoinController#handleJoinRequest
-master节点(node2)将最新的集群状态(v1)发布给其余节点, 其余节点会返回ack消息给master, master接收到所有节点的ack消息后才会向其余节点发送commit消息, node1和node3接收到commit消息后, 会应用master请求的更新的集群状态v1, 并且会定期向master节点发送消息, 确认master节点正常工作  MasterFaultDetection#restart
-之后master节点会每过一段时间向这些节点发送ping消息, 以确认这些节点是否正常工作            NodesFaultDetection#updateNodesAndPing
-待上述步骤完成后, 假定node4开始启动, 同样需要向其配置的hosts节点依次发送ping消息, 与前3个节点不同的是, node4接收到的ping返回包含了node2是master的信息, 因此node4可以直接加入以node2为master的集群
-node2接收到node4的joining请求后, 由于选master的过程已经结束了, 所以node2提交了一个集群状态更新的任务, 并提交给所有涉及到的节点(包括node4), 最后node2将node4纳入故障监测列表                                  NodeJoinController#handleJoinRequest
+* `Node#start`: ES一系列的服务启动, 并且获取`Discovery`实例, 并启动, 默认配置下执行的是`ZenDiscovery#doStart`, 而后调用`ZenDiscovery#startInitialJoin`方法;
+* `ZenDiscovery#ZenDiscovery`: `ZenDiscovery`的构造方法中, 构造了多个实例之后, 会注册`internal:discovery/zen/rejoin`使用`RejoinClusterRequestHandler`进行处理;
+** `MasterFaultDetection`实例会注册`internal:discovery/zen/fd/master_ping`请求使用`MasterPingRequestHandler`进行处理; 
+** `NodesFaultDetection`实例会注册`internal:discovery/zen/fd/ping`请求使用`PingRequestHandler`进行处理;
+** `MembershipAction`实例会注册`internal:discovery/zen/join`使用`JoinRequestRequestHandler`进行处理; 注册`internal:discovery/zen/join/validate`使用`ValidateJoinRequestRequestHandler`进行处理; 注册`internal:discovery/zen/leave`使用`LeaveRequestRequestHandler`进行处理;
+* `ZenDiscovery#doStart`: 构建初始状态的`ClusterState`, 调用`JoinThreadControl#start`方法, 而后调用`ZenPing#start`(对于`UnicastZenPing#start`为空方法);
+* `JoinThreadControl#start`: 设置`running`状态为`true`;
+* `ZenDiscovery#startInitialJoin`: 调用`ZenDiscovery.JoinThreadControl#startNewThreadIfNotRunning`方法;
+* `ZenDiscovery.JoinThreadControl#startNewThreadIfNotRunning`: 确认当前线程仍然持有锁, 并且`running`状态为`true`, 接下来在generic线程池执行`ZenDiscovery#innerJoinCluster`方法;
+* `ZenDiscovery#innerJoinCluster`: 持续循环执行`ZenDiscovery#findMaster`, 直到找到或者失去运行信号为止;
+* `ZenDiscovery#findMaster`: 开始执行`ZenDiscovery#pingAndWait`;
+* `ZenPing#ping`: 根据`discovery.zen.ping.unicast.hosts`配置的主机列表, 为每一个主机发送请求`UnicastZenPing#sendPingRequestToNode`, 分别发送3次, 而后再调用`UnicastZenPing#finishPingingRound`;
+** `threadPool.generic().execute(pingSender);`
+** `threadPool.schedule(TimeValue.timeValueMillis(scheduleDuration.millis() / 3), ThreadPool.Names.GENERIC, pingSender);`
+** `threadPool.schedule(TimeValue.timeValueMillis(scheduleDuration.millis() / 3 * 2), ThreadPool.Names.GENERIC, pingSender);`
+** `threadPool.schedule(scheduleDuration, ThreadPool.Names.GENERIC, finishPingingRound);`
+* `UnicastZenPing#sendPingRequestToNode`: 该任务提交到专门的线程池`nodeName() + "/" + "unicast_connect"`, 如果已经连接到了该节点, 则直接获取到该节点的连接, 如果未连接到该节点, 则打开到节点连接`TcpTransport#openConnection`, 并向该节点发送`internal:transport/handshake`, 如果接收到handshake的response, 则使用该连接发送`internal:discovery/zen/unicast`, 接收到该请求的处理器为`UnicastPingRequestHandler`;
+* `UnicastPingRequestHandler#messageReceived`: 接收到请求后将请求中包含的`pingResponse`追加到返回中
+* `TransportResponseHandler#handleResponse`: 将返回添加到`PingCollection`, 并在`ZenDiscovery#pingAndWait`中返回
+* `ZenDiscovery#findMaster`: 继续往下执行`findMaster`方法, 并将`ZenPing.PingResponse`中的node加入待选master列表中, 然后当有足够的待选master节点(`discovery.zen.minimum_master_nodes`)后, 执行`ElectMasterService#electMaster`, 选举一个master节点
+* `ZenDiscovery#innerJoinCluster`: 当获取到一个master节点后, 有两种情况, 一种情况为当前节点被选举为master, 另一种情况当前节点不是master节点
+** `ZenDiscovery#joinElectedMaster`: 该方法处理其他节点被选举为master的情况, 首先要连接到选举的master节点, 然后发送`internal:discovery/zen/join`请求, 然后在本线程阻塞直到获取到返回;
+** `NodeJoinController#waitToBeElectedAsMaster`: 该方法处理当前节点被选举为master的情况, 阻塞当前线程直到有足够的节点`discovery.zen.minimum_master_nodes`加入;
+* `MembershipAction.JoinRequestRequestHandler#messageReceived`: master节点接收到某个节点的`internal:discovery/zen/join`请求, 首先尝试建立与其的连接`transportService.connectToNode(node)`, 然后向该节点同步发送`internal:discovery/zen/join/validate`直到接收到返回, 然后调用`NodeJoinController#handleJoinRequest`;
+* `NodeJoinController#handleJoinRequest`: 提交`zen-disco-node-join`集群状态变更任务, 任务内容为`NodeJoinController.JoinTaskExecutor#execute`, 将请求源的节点加入到当前状态的节点(s)中;
+* 假定集群中又有新的节点开始启动, 同样需要向它配置的hosts节点依次发送`internal:discovery/zen/unicast`请求, 与之前的流程不同, 该节点接收到的返回中包含master的信息, 因此该节点可以直接加入以master节点的集群;
 
 下图描述了Discovery过程的线程模型
 

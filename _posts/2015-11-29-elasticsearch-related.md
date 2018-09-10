@@ -273,6 +273,15 @@ Bulk操作的简要流程如下图所示
 
 <img src="/assets/img/es_discovery_nodes.png" class="img-thumbnail">
 
+### 集群状态更新
+
+* `MasterService#submitStateUpdateTasks`: 集群状态更新的任务提交给了master节点上的`TaskBatcher#submitTasks`;
+* `TaskBatcher#submitTasks`: 该方法接收到一系列的`BatchedTask`, 这些被一批提交的任务必须使用一个`batchingKey`, 所有这些任务以及之前共享这个`batchingKey`的任务都将被添加到一个全局map中, key为`batchingKey`, 将这批任务中的第一个任务交给`PrioritizedEsThreadPoolExecutor#execute`执行;
+* `PrioritizedEsThreadPoolExecutor#execute`: 线程池按照优先级等规则, 提交执行任务, 实际执行内容为`TaskBatcher#runIfNotProcessed`;
+* `TaskBatcher#runIfNotProcessed`: 根据上面提到的第一个任务的`batchingKey`获取整批任务, 并调用`MasterService.Batcher#run`执行这批任务;
+* `MasterService.Batcher#run`: 
+
+
 ## 值得注意的一些功能
 
 ### ingest node
